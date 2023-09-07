@@ -1,0 +1,115 @@
+// ==UserScript==
+// @name        Bark
+// @namespace   https://fantorovevo.com/
+// @homepageURL https://fantorovevo.com/
+// @match       https://twitter.com/*
+// @grant       none
+// @version     1.1.4
+// @author      fantoro & riffygriff (https://riffygriff.com/)
+// @description Replaces all occurences of "Tweet" on Twitter with "Bark"
+// @updateURL   https://gist.githubusercontent.com/fantoro/0291c59de492789a12beb0d2b892e51d/raw/barkify.js
+// @downloadURL https://gist.githubusercontent.com/fantoro/0291c59de492789a12beb0d2b892e51d/raw/barkify.js
+// ==/UserScript==
+
+/*
+ * MIT License
+ *
+ * Copyright (c) 2022 fantoro <fantoro@fantorovevo.com>
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining a copy
+ * of this software and associated documentation files (the "Software"), to deal
+ * in the Software without restriction, including without limitation the rights
+ * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+ * copies of the Software, and to permit persons to whom the Software is
+ * furnished to do so, subject to the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be included in all
+ * copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+ * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+ * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+ * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+ * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+ * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+ * SOFTWARE.
+ *
+ *  mini changelog
+ *  version 1.1.4
+ *
+ *  made the script work on chrome + tampermonkey
+ *  removed GM_config as it seemed to be causing issues
+ *
+ *  change line 53 for custom bark text
+ *  I'll try to figure out new GM_getValue/setValue behavior later
+ *
+ *  mostly contributed by riffygriff (https://riffygriff.com/ or @riffygriff@twitter.com)
+ *  I only really made the script not do textboxes properly again
+ *
+ */
+
+const textToReplace = "ok";
+let barkTextTemplate = "<img src=\"https://pbs.twimg.com/media/F5cHUQ0XcAAbQ6h?format=webp&name=tiny\" alt=\"a\" width=\"30\" height=\"30\">";
+
+function recurseTree(node, func) {
+  if (!(node instanceof HTMLElement || func instanceof Function)) return null; // invalid object/func passed
+
+  const children = node.children;
+  for (let i=0; i < children.length; i++) {
+    const child = children[i];
+    if (child.tagName == "SCRIPT" ||
+        child.getAttribute("role") == "textbox" ||
+        child.getAttribute("data-text") == "true")
+      continue;
+
+    recurseTree(child, func);
+  }
+
+  if (children.length == 0)
+    func(node);
+}
+
+function barkify(node) {
+  const ogText = node.innerHTML;
+
+  const indexOc = ogText.toLowerCase().indexOf(textToReplace);
+  if (indexOc < 0) return;
+  const textBefore = ogText.slice(0, indexOc); // I love tweeting
+  const textAfter = ogText.slice(indexOc+textToReplace.length, ogText.length);
+
+  const ogTTR = ogText.slice(indexOc, indexOc+textToReplace.length);
+
+  let barkText = "";
+
+  if (ogTTR[0] == ogTTR[0].toUpperCase())
+    barkText += barkTextTemplate[0].toUpperCase();
+  else
+    barkText += barkTextTemplate[0];
+
+  if (ogTTR.slice(1, ogTTR.length) == ogTTR.slice(1, ogTTR.length).toUpperCase())
+    barkText += barkTextTemplate.slice(1, barkTextTemplate.length).toUpperCase();
+  else
+    barkText += barkTextTemplate.slice(1, barkTextTemplate.length);
+
+  node.innerHTML = textBefore + barkText + textAfter;
+
+  barkify(node); // recursively catch repeated occurrences
+}
+
+console.debug("Creating observer");
+const Observer = new MutationObserver((MRecords, Observer) => {
+  console.debug("Observer");
+  for (let i=0; i < MRecords.length; i++) {
+    const MRecord = MRecords[i];
+    const TargetElement = MRecord.target;
+    recurseTree(TargetElement, barkify);
+  }
+});
+
+Observer.observe(document.body, {
+  subtree: true,
+  childList: true,
+  attributes: true
+})
+
+recurseTree(document.body, barkify);
